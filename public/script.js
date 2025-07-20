@@ -1,50 +1,46 @@
-document.getElementById('contactForm').addEventListener('submit', async function (e) {
-  e.preventDefault();
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  const name = document.getElementById('name').value.trim();
-  const email = document.getElementById('email').value.trim();
-  const message = document.getElementById('message').value.trim();
-  const statusMsg = document.getElementById('formStatus');
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
+// Contact form handler
+app.post('/contact', (req, res) => {
+  const { name, email, message } = req.body;
   if (!name || !email || !message) {
-    statusMsg.textContent = "Please fill out all fields.";
-    statusMsg.classList.remove('hidden');
-    statusMsg.classList.remove('text-green-600');
-    statusMsg.classList.add('text-red-600');
-    return;
+    return res.status(400).json({ error: 'All fields are required.' });
   }
 
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailPattern.test(email)) {
-    statusMsg.textContent = "Please enter a valid email address.";
-    statusMsg.classList.remove('hidden');
-    statusMsg.classList.remove('text-green-600');
-    statusMsg.classList.add('text-red-600');
-    return;
-  }
+  const contact = { name, email, message, date: new Date().toISOString() };
+  const filePath = path.join(__dirname, 'contacts.json');
 
-  // Send to backend
-  try {
-    const response = await fetch('/contact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, message })
-    });
-
-    const result = await response.json();
-    if (response.ok) {
-      statusMsg.textContent = result.message;
-      statusMsg.classList.remove('text-red-600');
-      statusMsg.classList.add('text-green-600');
-      statusMsg.classList.remove('hidden');
-      this.reset();
-    } else {
-      throw new Error(result.error || "Submission failed");
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    let contacts = [];
+    if (!err && data) {
+      try {
+        contacts = JSON.parse(data);
+      } catch (e) {
+        console.error("Error parsing contacts.json:", e);
+      }
     }
-  } catch (err) {
-    statusMsg.textContent = err.message;
-    statusMsg.classList.remove('hidden');
-    statusMsg.classList.remove('text-green-600');
-    statusMsg.classList.add('text-red-600');
-  }
+
+    contacts.push(contact);
+
+    fs.writeFile(filePath, JSON.stringify(contacts, null, 2), err => {
+      if (err) {
+        console.error('Error saving contact:', err);
+        return res.status(500).json({ error: 'Internal server error.' });
+      }
+      res.status(200).json({ message: 'Contact saved successfully.' });
+    });
+  });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
